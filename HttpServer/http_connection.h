@@ -4,6 +4,7 @@
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/asio.hpp>
+#include <set>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -34,8 +35,14 @@ protected:
 	void createResponsePost();
 	void writeResponse();
 	void checkDeadline();
+	
+	
 
 public:
 	HttpConnection(tcp::socket socket);
 	void start();
+
+private:
+	std::set<std::string> parsing(const std::string& str);
+	void using_database(const std::set<std::string>& words, std::vector<std::string>& results);
 };

@@ -5,13 +5,21 @@
 #include <locale>
 #include <codecvt>
 #include <iostream>
+#include <pqxx/pqxx>
+#include <set>
+#include <unordered_map>
+#include "settings.h"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 
-
+struct Compare {
+	bool operator()(std::pair<int, int> first, std::pair<int, int> second) {
+		return first.second > second.second;
+	}
+};
 
 std::string url_decode(const std::string& encoded) {
 	std::string res;
@@ -42,6 +50,95 @@ HttpConnection::HttpConnection(tcp::socket socket)
 {
 }
 
+std::set<std::string> HttpConnection::parsing(const std::string& str) {
+
+	std::set<std::string> words;
+	std::string temp;
+	int n = 0;
+	for (std::string::const_iterator it = str.begin(); it != str.end(); ++it) {
+		if (*it == ' ' && n > 1) {
+			words.insert(temp);
+			temp.clear();
+			n = -1;
+		}
+		else if (*it == ',' || *it == '+' && n > 1) {
+			words.insert(temp);
+			temp.clear();
+			n = -1;
+		}
+		else if (*it == ' ', *it == ',', *it == '+' && n < 2) {
+			--n;
+			temp.clear();
+		}
+		else {
+			temp += *it;
+			++n;
+		}
+		
+	}
+	if (temp.size() > 1) {
+		words.insert(temp);
+	}
+	return words;
+}
+
+void HttpConnection::using_database(const std::set<std::string>& words, std::vector<std::string>& results) {
+
+	std::string connection_string = "host=" + settings::host + " port=" + settings::port + " dbname=" + settings::database + " user=" + settings::name + " password=" + settings::password;
+	pqxx::connection conn(connection_string);
+	std::vector<std::unordered_map<int, int>> query;
+	for (auto& s : words) {
+		std::unordered_map<int, int> temp;
+		pqxx::work worker(conn);
+		pqxx::result result = worker.exec(
+			"SELECT d.doc_id, d.appearance FROM docword d "
+			"WHERE(SELECT word_id FROM words WHERE word = " + worker.quote(s) + ") = word_id "
+			"ORDER BY appearance DESC;"
+			);
+		if (result.empty()) {
+			beast::ostream(response_.body()) << "Nothig found!";
+			return;
+		}
+		else {
+			for (auto r : result) {
+	
+				temp.emplace(r["doc_id"].as<int>(), r["appearance"].as<int>());
+			}
+			
+		}
+		worker.commit();
+		query.push_back(temp);
+	}
+	
+	std::unordered_map<int, int> included;
+		for (auto& map : query) {
+			for(auto& pair : map){
+				if (included.find(pair.first) != included.end()) {
+					included[pair.first] += pair.second;
+				}
+				else {
+					included.emplace(pair.first, pair.second);
+				}
+			}
+	}
+		std::vector<std::pair<int, int>> sorted;
+		for (auto& i : included) {
+			sorted.emplace_back(i);
+		}
+		std::sort(sorted.begin(), sorted.end(), Compare());
+		for (auto& pair : sorted) {
+			pqxx::work worker(conn);
+			pqxx::result result = worker.exec(
+				"SELECT doc FROM document "
+				"WHERE doc_id = " + worker.quote(pair.first)
+			);
+			for (auto s : result) {
+				results.emplace_back(s["doc"].as<std::string>());
+			}
+			worker.commit();
+		}
+		
+}
 
 void HttpConnection::start()
 {
@@ -148,6 +245,7 @@ void HttpConnection::createResponsePost()
 
 		std::string utf8value = convert_to_utf8(value);
 
+		
 		if (key != "search")
 		{
 			response_.result(http::status::not_found);
@@ -156,13 +254,16 @@ void HttpConnection::createResponsePost()
 			return;
 		}
 
-		// TODO: Fetch your own search results here
-
-		std::vector<std::string> searchResult = {
-			"https://en.wikipedia.org/wiki/Main_Page",
-			"https://en.wikipedia.org/wiki/Wikipedia",
-		};
-
+		std::vector<std::string> searchResult;
+		std::set<std::string> find_words = parsing(utf8value);
+		
+		if (find_words.empty()) {
+			beast::ostream(response_.body()) << "Uncorrect request! Try again!";
+		}
+		else {
+			using_database(find_words, searchResult);
+			
+		}
 
 		response_.set(http::field::content_type, "text/html");
 		beast::ostream(response_.body())
