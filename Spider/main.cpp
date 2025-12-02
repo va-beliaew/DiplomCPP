@@ -222,6 +222,9 @@ int main()
 				get_set(temp);
 			}
 		}
+		else {
+			throw std::exception("settings.ini isn't open!");
+		}
 		std::string connection_parameters = "host=" + settings::host + " port=" + settings::port + " dbname=" + settings::database + " user=" + settings::name + " password=" + settings::password;
 		pqxx::connection conn (connection_parameters.c_str());
 		pqxx::work worker(conn);

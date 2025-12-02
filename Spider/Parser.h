@@ -20,7 +20,7 @@ public:
 
 	Parser();
 	Parser(const Parser& p) = delete;
-	void operator=(Parser p) = delete;
+	Parser& operator=(const Parser& p) = delete;
 	std::vector<std::string> parsing(const std::string& html);
 	std::set<std::string> get_link(const std::string& str, const Link& link);
 	~Parser();

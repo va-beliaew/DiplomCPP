@@ -82,12 +82,15 @@ int main(int argc, char* argv[])
 				get_set(temp);
 			}
 		}
+		else {
+			throw std::exception ("settings.ini isn't open!");
+		}
 
 		auto const address = net::ip::make_address("0.0.0.0");
-		unsigned int port = 8080;
+		tcp::endpoint endpoint(address, settings::local_port);
 		net::io_context ioc{ 1 };
 
-		tcp::acceptor acceptor{ ioc, { address, 8080 } };
+		tcp::acceptor acceptor{ ioc, endpoint };
 		tcp::socket socket{ ioc };
 		httpServer(acceptor, socket);
 
