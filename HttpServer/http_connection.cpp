@@ -66,7 +66,7 @@ std::set<std::string> HttpConnection::parsing(const std::string& str) {
 			temp.clear();
 			n = -1;
 		}
-		else if (*it == ' ', *it == ',', *it == '+' && n < 2) {
+		else if (*it == ' ' || *it == ',' || *it == '+' && n < 2) {
 			--n;
 			temp.clear();
 		}
@@ -81,6 +81,7 @@ std::set<std::string> HttpConnection::parsing(const std::string& str) {
 	}
 	return words;
 }
+
 
 void HttpConnection::using_database(const std::set<std::string>& words, std::vector<std::string>& results) {
 
@@ -254,6 +255,7 @@ void HttpConnection::createResponsePost()
 			return;
 		}
 
+		std::transform(utf8value.begin(), utf8value.end(), utf8value.begin(), [](char ch) {return std::tolower(ch); });
 		std::vector<std::string> searchResult;
 		std::set<std::string> find_words = parsing(utf8value);
 		

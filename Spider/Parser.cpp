@@ -142,57 +142,61 @@ void Parser::final_clean(const std::string& text, std::vector<std::string>& word
 		xmlXPathObjectPtr result = xmlXPathEvalExpression((const xmlChar*)("//a/@href"), context);
 		if (result && result->type == XPATH_NODESET) {
 			xmlNodeSetPtr node = result->nodesetval;
-			for (int i = 0; i < node->nodeNr; ++i) {
-				xmlChar* content = xmlNodeGetContent(node->nodeTab[i]);
-				if (content) {
-					links.push_back(std::string(reinterpret_cast<const char*>(content)));
-					xmlFree(content);
-				}
-			}
-		}
-		if (result) {
-			xmlXPathFreeObject(result);
-			xmlXPathFreeContext(context);
-			xmlFreeDoc(doc);
-		}
-
-		for (auto it = links.begin(); it < links.end(); ) {
-			if (!(*it).empty()) {
-				std::string temp = *it;
-				if (*temp.begin() == '#') {
-					it = links.erase(it);
-				}
-				else if (*temp.begin() == '/') {
-					std::string protocol;
-					link.protocol == ProtocolType::HTTPS ? protocol = "https://" : protocol = "http://";
-					*it = protocol + link.hostName + temp;
-					++it;
-				}
-				else if (*temp.begin() == 'h' || *temp.begin() == 'H') {
-					std::string prot;
-					for (int i = 0; i < 4; ++i) {
-						prot += temp[i];
+			if (node != nullptr){
+				for (int i = 0; i < node->nodeNr; ++i) {
+					xmlChar* content = xmlNodeGetContent(node->nodeTab[i]);
+					if (content) {
+						links.push_back(std::string(reinterpret_cast<const char*>(content)));
+						xmlFree(content);
 					}
-					if (prot != "http" && prot != "HTTP") {
-						it = links.erase(it);
+				}
+		}
+			}
+			if (result) {
+				xmlXPathFreeObject(result);
+				xmlXPathFreeContext(context);
+				xmlFreeDoc(doc);
+			}
+			if (!links.empty()) {
+				for (auto it = links.begin(); it < links.end(); ) {
+					if (!(*it).empty()) {
+						std::string temp = *it;
+						if (*temp.begin() == '#') {
+							it = links.erase(it);
+						}
+						else if (*temp.begin() == '/') {
+							std::string protocol;
+							link.protocol == ProtocolType::HTTPS ? protocol = "https://" : protocol = "http://";
+							*it = protocol + link.hostName + temp;
+							++it;
+						}
+						else if (*temp.begin() == 'h' || *temp.begin() == 'H') {
+							std::string prot;
+							for (int i = 0; i < 4; ++i) {
+								prot += temp[i];
+							}
+							if (prot != "http" && prot != "HTTP") {
+								it = links.erase(it);
+							}
+							else {
+								++it;
+							}
+						}
+						else {
+							*it = "https://" + temp;
+							++it;
+						}
+
 					}
 					else {
-						++it;
+						it = links.erase(it);
 					}
 				}
-				else {
-					*it = "https://" + temp;
-					++it;
+
+				for (auto& s : links) {
+					ordered_links.insert(s);
 				}
-
 			}
-			else {
-				it = links.erase(it);
-			}
-		}
-
-		for (auto& s : links) {
-			ordered_links.insert(s);
-		}
-		return ordered_links;
+			return ordered_links;
+		
 	}

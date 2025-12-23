@@ -15,6 +15,7 @@
 #include <Windows.h>
 #include "settings.h"
 #include "Parser.h"
+#include "link.h"
 
 
 std::mutex sql_mtx;
@@ -46,42 +47,6 @@ std::map<std::string, unsigned int> counting (const std::vector<std::string>& te
 		}
 	}
 	return result;
-}
-
-Link div_html_adress(std::string adr) {
-	std::string temp;
-	std::string protocol;
-	std::string adress;
-	std::string query;
-	Link link;
-	for (auto i = adr.begin(); i != adr.end(); i++) {
-		temp += *i;
-		if (*i == ':') {
-			temp.pop_back();
-			protocol = temp;
-			temp.clear();
-			i += 2;
-		}
-		else if (*i == '/') {
-			temp.pop_back();
-			adress = temp;
-			temp.clear();
-			for (auto it = i; it != adr.end(); ++it) {
-				query += *it;
-			}
-			i = adr.end()-1;
-		}
-		
-	}
-	if (protocol == "http") {
-		link.protocol = ProtocolType::HTTP;
-	}
-	else if (protocol == "https") {
-		link.protocol = ProtocolType::HTTPS;
-	}
-	link.hostName = adress;
-	link.query = query;
-	return link;
 }
 
 
@@ -140,21 +105,22 @@ void parseLink(const Link& link, int depth, const std::string& connection_parame
 
 		std::cout << "html content:" << std::endl;
 		std::cout << html << std::endl;
-
-		std::vector<Link> links;
-		for (auto it = got_links.begin(); it != got_links.end(); ++it) {
-			links.push_back(div_html_adress(*it));
-		}
-		if (depth > 0) {
-			std::lock_guard<std::mutex> lock(mtx);
-
-			size_t count = links.size();
-			size_t index = 0;
-			for (auto& subLink : links)
-			{
-				tasks.push([subLink, depth, &connection_parameters, &parser]() { parseLink(subLink, depth - 1, connection_parameters, parser); });
+		if (!got_links.empty()) {
+			std::vector<Link> links;
+			for (auto it = got_links.begin(); it != got_links.end(); ++it) {
+				links.emplace_back(Link(*it));
 			}
-			cv.notify_one();
+			if (depth > 0) {
+				std::lock_guard<std::mutex> lock(mtx);
+
+				size_t count = links.size();
+				size_t index = 0;
+				for (auto& subLink : links)
+				{
+					tasks.push([subLink, depth, &connection_parameters, &parser]() { parseLink(subLink, depth - 1, connection_parameters, parser); });
+				}
+				cv.notify_one();
+			}
 		}
 	}
 	catch (const std::exception& e)
@@ -244,7 +210,8 @@ int main()
 			threadPool.emplace_back(threadPoolWorker);
 		}
 
-		Link link = div_html_adress(settings::page);
+		Link link;
+		link.div_html_adress(settings::page);
 		
 
 		{
